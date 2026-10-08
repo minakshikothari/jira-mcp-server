@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jira MCP Assistant</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-badge">J</div>
+        <div class="brand-text">
+          <div class="brand-title">Jira MCP Assistant</div>
+          <div class="brand-subtitle">Proof of concept &middot; natural language &rarr; MCP tool calls &rarr; Jira</div>
+        </div>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Ready</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="chat">Chat</button>
+      <button class="tab-btn" data-tab="dashboard">Dashboard</button>
+    </nav>
+
+    <!-- ================= CHAT TAB ================= -->
+    <section class="tab-panel active" id="tab-chat">
+      <div class="architecture-strip" id="architectureStrip">
+        <span class="chip-static">You type a command</span>
+        <span class="arrow">&rarr;</span>
+        <span class="chip-static" id="brainChip">MCP tool selected</span>
+        <span class="arrow">&rarr;</span>
+        <span class="chip-static">Jira REST API</span>
+        <span class="arrow">&rarr;</span>
+        <span class="chip-static">Live result</span>
+      </div>
+
+      <div class="ai-mode-row">
+        <label class="ai-mode-toggle" id="aiModeToggleLabel" title="Loading...">
+          <input type="checkbox" id="aiModeToggle" disabled />
+          AI mode &mdash; let Claude understand free text instead of fixed commands
+        </label>
+        <span class="ai-mode-hint" id="aiModeHint"></span>
+        <button type="button" class="reset-chat-btn" id="resetChatBtn" title="Clear the AI conversation memory and start fresh">Reset conversation</button>
+      </div>
+
+      <main class="chat" id="chat"></main>
+
+      <div class="examples" id="examples">
+        <button class="chip" data-cmd="show my issues">Show my issues</button>
+        <button class="chip" data-cmd="issues in PROJ">Issues in PROJ</button>
+        <button class="chip" data-cmd="move PROJ-123 to In Review">Move an issue</button>
+        <button class="chip" data-cmd="comment on PROJ-123: checked, looks good">Add a comment</button>
+        <button class="chip" data-cmd="add PROJ-123 to the current sprint">Add to sprint</button>
+        <button class="chip" data-cmd="help">Help</button>
+      </div>
+
+      <form class="composer" id="composer">
+        <input
+          type="text"
+          id="input"
+          placeholder="Type a command, e.g. &quot;show my issues&quot; or &quot;create a bug in PROJ: ...&quot;"
+          autocomplete="off"
+        />
+        <button type="submit" id="sendBtn">Send</button>
+      </form>
+    </section>
+
+    <!-- ================= DASHBOARD TAB ================= -->
+    <section class="tab-panel" id="tab-dashboard">
+      <form class="filters" id="dashboardFilters">
+        <div class="filter-field">
+          <label for="projectKey">Project</label>
+          <input type="text" id="projectKey" value="PROJ" placeholder="e.g. PROJ" />
+        </div>
+
+        <div class="filter-field checkbox-field">
+          <label>
+            <input type="checkbox" id="onlyMyTickets" checked />
+            Only my tickets
+          </label>
+        </div>
+
+        <div class="filter-field" id="assigneeField" hidden>
+          <label for="assignee">Assignee</label>
+          <input type="text" id="assignee" placeholder="username, or blank = everyone" />
+        </div>
+
+        <div class="filter-field checkbox-field">
+          <label>
+            <input type="checkbox" id="currentSprintOnly" />
+            Current sprint only
+          </label>
+        </div>
+
+        <div class="filter-field">
+          <label for="dateField">Date field</label>
+          <select id="dateField">
+            <option value="created">Created</option>
+            <option value="updated">Updated</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+
+        <div class="filter-field">
+          <label for="fromDate">From</label>
+          <input type="date" id="fromDate" />
+        </div>
+
+        <div class="filter-field">
+          <label for="toDate">To</label>
+          <input type="date" id="toDate" />
+        </div>
+
+        <button type="submit" class="apply-btn" id="applyBtn">Apply</button>
+      </form>
+
+      <div class="filter-field type-filter">
+        <label>Issue type</label>
+        <div class="type-chips" id="typeChips">
+          <button type="button" class="type-chip active" data-type="All">All</button>
+          <button type="button" class="type-chip" data-type="Task">Task</button>
+          <button type="button" class="type-chip" data-type="Story">Story</button>
+          <button type="button" class="type-chip" data-type="Defect">Defect</button>
+        </div>
+      </div>
+
+      <div id="dashboardError" class="dashboard-error" hidden></div>
+
+      <div id="dashboardContent" hidden>
+        <div class="kpi-row" id="kpiRow"></div>
+
+        <div class="panel">
+          <div class="panel-title">Breakdown by status <span class="hint">(click to filter tickets below)</span></div>
+          <div class="bar-list" id="statusBarList"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              Workload by assignee <span class="hint">(Story Points, this query's scope &mdash; ignores "Only my tickets")</span>
+            </div>
+            <details class="tool-call">
+              <summary>Show JQL used</summary>
+              <pre id="workloadJql"></pre>
+            </details>
+          </div>
+          <div class="bar-list" id="workloadBarList"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              Tickets (<span id="ticketCount">0</span>)
+              <span id="filterIndicator" class="filter-indicator" hidden>
+                &middot; showing <span id="filterIndicatorLabel"></span>
+                <button type="button" id="clearFilterBtn">&times; clear</button>
+              </span>
+            </div>
+            <details class="tool-call">
+              <summary>Show JQL used</summary>
+              <pre id="dashboardJql"></pre>
+            </details>
+          </div>
+          <div class="table-wrap">
+            <table class="ticket-table">
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Status</th>
+                  <th>Summary</th>
+                  <th>Assignee</th>
+                  <th>Priority</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="ticketTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="dashboardEmpty" class="dashboard-empty">
+        Pick a project and click Apply to load the dashboard.
+      </div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

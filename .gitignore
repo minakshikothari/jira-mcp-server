@@ -1,0 +1,16 @@
+target/
+*.class
+.DS_Store
+.idea/
+*.iml
+.vscode/
+*.log
+
+# Never commit real credentials — JIRA_ACCESS_TOKEN / ANTHROPIC_API_KEY are
+# passed as environment variables at runtime, never stored in a file here.
+.env
+*.env
+secrets.properties
+
+# shade plugin build artifact
+dependency-reduced-pom.xml
